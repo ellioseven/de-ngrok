@@ -1,17 +1,26 @@
-FROM node:9
-MAINTAINER elliot.mitchum@ellioseven.com.au
+FROM debian:stable
 
-ENV APP_NPM_GLOBAL_DIR /home/node/.npm-packages
-ENV LT_HOST localhost
-ENV LT_PORT 80
-ENV LT_SUBDOMAIN de-tunnel
-ENV PATH /home/node/.npm-packages/bin:$PATH
+ENV NGROK_PROTOCOL http
+ENV NGROK_REGION au
+ENV NGROK_HOST localhost
+ENV NGROK_PORT 80
 
-# Install global packages to '$APP_NPM_GLOBAL_DIR'.
-RUN mkdir -p $APP_NPM_GLOBAL_DIR \
-	&& echo "prefix=$APP_NPM_GLOBAL_DIR" >> /home/node/.npmrc \
-	&& chown -R node:node /home/node
+# Create ngrok user.
+RUN groupadd --gid 6767 ngrok \
+	&& useradd --uid 6767 --gid ngrok --shell /bin/bash --create-home ngrok
 
-USER node
-RUN npm install -g localtunnel
-CMD ["sh", "-c", "lt -l $LT_HOST -p $LT_PORT -s $LT_SUBDOMAIN"]
+# Install ngrok.
+ADD https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip /tmp/ngrok.zip
+COPY ngrok.yml /home/ngrok/.ngrok2/
+RUN chown -R ngrok:ngrok /home/ngrok
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends unzip \
+  && unzip /tmp/ngrok.zip -d /bin \
+  && rm /tmp/ngrok.zip \
+  && apt-get purge -y --auto-remove unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+USER ngrok
+EXPOSE 4040
+
+CMD ["sh", "-c", "ngrok $NGROK_PROTOCOL -host-header=rewrite -region=$NGROK_REGION $NGROK_HOST:$NGROK_PORT"]
